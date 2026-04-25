@@ -1,25 +1,31 @@
 # Sarasa Term SC + Twemoji (Aligned)
 
-CJK monospace + 彩色 emoji 严格等宽对齐字体。
+CJK monospace + 彩色 emoji 严格等宽对齐字体——VS Code / 终端表格不再因 emoji 错位。
 
-> **问题**：VS Code 等 advance-width 渲染器里，emoji 回退到系统字体（Segoe UI Emoji 等），advance width 不严格 = 2× ASCII → 含 emoji 的行视觉偏列；表格、对齐注释等场景错位。
+> **问题**：advance-width 渲染器（VS Code 等）里，emoji 回退到 Segoe UI Emoji 等系统字体，advance ≠ 2× ASCII → 含 emoji 的行视觉偏列；表格、对齐注释场景错位。
 > **解法**：把 Twemoji 改造为 advance=1000、UPM=1000，与 Sarasa Term SC 的 CJK 严格等宽。
 
-## 产物
+## 产物（直接安装）
 
 | 文件 | 大小 | 用途 |
 |------|------|------|
-| `TwemojiAligned-Regular.ttf` | 18 KB | 仅 49 个常用 emoji，advance=1000，配 Sarasa Term SC 用 |
-| `SarasaTermSCEmoji.ttc` | 24 MB | TTC 合集：Sarasa Term SC + Twemoji Aligned，单文件分发 |
+| `TwemojiAligned-Regular.ttf` | 18 KB | 49 个常用 emoji，advance=1000，配 Sarasa Term SC 用 |
+| `SarasaTermSCEmoji.ttc` | 24 MB | TTC 合集：Sarasa Term SC + Twemoji Aligned 单文件 |
 
-49 个常用 emoji 范围：状态/标记（✅❌⭐⚠❓❗）+ 表情（👍👎😊🤔）+ 进度（⬆⬇⬅➡↩）+ 工具（🚀🔧📌🔒🔍）+ 心情（❤🔥✨）。完整列表见 [build/COMMON_EMOJI_CODEPOINTS](https://github.com/JoeZhangYN/claude-workbench/blob/main/tools/font-patcher/patch.py)。
+49 个 emoji 范围（完整列表见 [`patch.py`](patch.py) 的 `COMMON_EMOJI_CODEPOINTS`）：
+- 状态/标记：✅ ❌ ❎ ⭐ ✓ ✗ ✔ ✘
+- 警示：⚠ ⛔ 🚫 ❗ ❓ ❕ ❔
+- 表情：👍 👎 👏 🔥 ✨ 🎉 💡 🤔 😊 😂 😢
+- 方向/进度：⬅ ⬆ ⬇ ➡ ↩ ↪ 🔄
+- 工具：🚀 🔧 🔨 📌 📎 📝 📖 📚 📅 🕑 ⏰ ⌛ 🔒 🔓 🔑 🔍
+- 心情：❤ 💔 💯
 
 ## 安装
 
 ### 方案 A — 标准做法（推荐）
 
-1. 双击 `TwemojiAligned-Regular.ttf` → Install for All Users
-2. 装 [Sarasa Term SC](https://github.com/be5invis/Sarasa-Gothic/releases)（如未装）
+1. 装 [Sarasa Term SC](https://github.com/be5invis/Sarasa-Gothic/releases)（如未装）
+2. 双击 `TwemojiAligned-Regular.ttf` → Install for All Users
 3. VS Code `settings.json`：
    ```json
    "editor.fontFamily": "'Twemoji Aligned', 'Sarasa Term SC', 'Cascadia Code', monospace",
@@ -30,26 +36,67 @@ CJK monospace + 彩色 emoji 严格等宽对齐字体。
 
 ### 方案 B — 单文件 TTC
 
-1. 卸载已装的 `Sarasa Term SC` 系列字体（如有）
+1. 卸载已装的 Sarasa Term SC（如有）
 2. 双击 `SarasaTermSCEmoji.ttc` → Install for All Users
 3. settings.json 同 A
 4. 完全 Exit + 重开 VS Code
 
-## 重建 / 自定义
+## 自己重建（修改白名单 / 换 emoji 源）
 
-字体由开源工具链生成：[claude-workbench/tools/font-patcher](https://github.com/JoeZhangYN/claude-workbench/tree/main/tools/font-patcher)
+### 前置
 
-工具链支持：
-- 换 emoji 源（Twemoji / Noto Color Emoji / 本机 Segoe UI Emoji）
-- 调整 emoji 白名单（默认 49 个，可加更多但需控制 ≤300 避开 64K glyph 上限）
-- 多权重（Regular / Bold / Italic）— 第一版只 Regular
+- Python 3.10+
+- 装 Sarasa Term SC Regular（路径：`%LOCALAPPDATA%\Microsoft\Windows\Fonts\SarasaTermSC-Regular.ttf`）
+- 网络（下载 Twemoji ~1.5 MB）
+
+### 一键构建（Windows）
+
+```cmd
+build.cmd
+```
+
+依次跑：
+1. 创建 `.venv` 装 fontTools
+2. [`download.py`](download.py) 拉 Twemoji-Mozilla v0.7.0
+3. [`patch_emoji_only.py`](patch_emoji_only.py) 子集化 + UPM 缩放 + advance 强制 1000
+4. [`build_ttc.py`](build_ttc.py) 把 Sarasa + 改造后 Twemoji 装 .ttc
+
+### 自定义白名单
+
+改 [`patch.py`](patch.py) 的 `COMMON_EMOJI_CODEPOINTS`：
+
+```python
+COMMON_EMOJI_CODEPOINTS = {
+    0x2705,  # ✅ check mark button
+    0x274C,  # ❌ cross mark
+    # ... 加你需要的 codepoint
+    0x1F308, # 🌈 rainbow（举例）
+}
+```
+
+⚠️ 上限约 ~200 codepoint：每 emoji 含 ~3-30 个 color layer glyph，加 Sarasa 56794 base glyph 容易撞 TTF 64K 上限。超过会报 `numGlyphs > 65535`，再裁。
+
+### 换 emoji 源
+
+```bash
+# 用 Noto Color Emoji（OFL，扁平风）
+python download.py --noto
+python patch_emoji_only.py downloads/Noto-COLRv1.ttf TwemojiAligned-Regular.ttf "Noto Emoji Aligned"
+```
+
+或本机使用 Microsoft Segoe UI Emoji（**不可发布**）：
+
+```bash
+python patch_emoji_only.py "C:/Windows/Fonts/seguiemj.ttf" SegoeAligned.ttf "Segoe UI Emoji Aligned"
+```
 
 ## 许可证
 
-| 来源 | 协议 | 文件 |
+| 内容 | 协议 | 文件 |
 |------|------|------|
-| Sarasa Gothic / Term SC | SIL OFL-1.1 | [LICENSE-OFL-1.1.txt](LICENSE-OFL-1.1.txt) |
-| Twemoji emoji glyphs | CC-BY 4.0 | [LICENSE-CC-BY-4.0.txt](LICENSE-CC-BY-4.0.txt) |
+| 构建脚本（`*.py`、`build.cmd`、`requirements.txt`） | MIT | [`LICENSE`](LICENSE) |
+| Sarasa Gothic / Term SC | SIL OFL-1.1 | [`LICENSE-OFL-1.1.txt`](LICENSE-OFL-1.1.txt) |
+| Twemoji emoji glyphs | CC-BY 4.0 | [`LICENSE-CC-BY-4.0.txt`](LICENSE-CC-BY-4.0.txt) |
 
 **归属声明（CC-BY 4.0 必需）**：
 
@@ -65,16 +112,17 @@ CJK monospace + 彩色 emoji 严格等宽对齐字体。
 **允许**：
 - 个人 / 商业 / 教育使用
 - 嵌入软件、网站、文档
-- 修改 + 再分发（需保留同样的 License + 归属）
+- 修改 + 再分发（保留同样的 License + 归属）
 
 ## 故障排查
 
 | 现象 | 原因 | 解决 |
 |------|------|------|
-| emoji 仍是 Windows 默认彩色 | VS Code 没有完全重启 | File → Exit（不是 Reload Window） |
-| emoji 显示空白方框 | Sarasa Term SC 没装 | 装 Sarasa Term SC |
-| 中文字体变了 | settings.json fontFamily 顺序 | 检查 'Sarasa Term SC' 在 fallback 链中 |
+| emoji 仍是 Win 默认彩色 | VS Code 没真正重启 | File → Exit（不是 Reload Window） |
+| emoji 显示空白方框 | Sarasa Term SC 没装 | 装 [Sarasa Term SC](https://github.com/be5invis/Sarasa-Gothic/releases) |
+| 中文字体变了 | settings.json fontFamily 顺序错 | 检查 `'Sarasa Term SC'` 在 fallback 链中 |
 | 表格仍未对齐 | 老 emoji 字体优先级高 | DevTools (Ctrl+Shift+I) 看 computed font 是否真用了 Twemoji Aligned |
+| 重建报 `numGlyphs > 65535` | 白名单太大 | 减 `COMMON_EMOJI_CODEPOINTS`，目标 ≤200 codepoint |
 
 ## Changelog
 
