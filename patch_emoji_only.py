@@ -1,48 +1,103 @@
-"""v2 路线：单独 patch Noto-COLRv1，不合并 Sarasa。
+"""单独 patch emoji 字体（不合并 Sarasa——Merger 会丢 COLR/CPAL）。
 
-不合并的理由：fontTools Merger 不支持 COLR/CPAL 彩色表（merge 后会丢失），
-导致 emoji 字形被合并但失去彩色信息渲染为空白。
-
-替代方案：
-- 把 Noto-COLRv1 子集化（仅常用 emoji 50 个），UPM 重缩放至 1000，
-  所有 emoji glyph 的 advance 强制 = 1000（与 Sarasa CJK 等宽）
-- COLR/CPAL 表完整保留（彩色信息未动）
-- 用户 fontFamily 配置：Noto-Aligned 在前 + Sarasa 在后
-  - Chromium 渲染：emoji codepoint 在 Noto-Aligned 找到 → 用它（彩色 + 等宽）
-  - 其他 codepoint 在 Sarasa 找到 → 用 Sarasa
-- 两个字体的 advance 对齐到同一 UPM (1000)，VS Code 视觉对齐
+子集化 → UPM=1000 → emoji glyph advance=1000 → 纵向 metrics 拷自 base。
+这样 fontFamily 链里 Aligned 在前 + Sarasa 在后时，advance 与 line height 都对齐。
 """
 
+from __future__ import annotations
+
+import argparse
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 from fontTools.subset import Options as SubsetOptions, Subsetter
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.scaleUpem import scale_upem
 
-# 复用主 patch.py 的白名单
 sys.path.insert(0, str(Path(__file__).parent))
 from patch import COMMON_EMOJI_CODEPOINTS, in_common_emoji, update_name_table
+
+
+@dataclass(frozen=True, slots=True)
+class VerticalMetrics:
+    """终端行距源：USE_TYPO_METRICS=1 → sTypo*；老 Win GDI → usWin*；hhea 兜底。三套一并对齐 base。"""
+    upm: int
+    hhea_ascent: int
+    hhea_descent: int
+    hhea_line_gap: int
+    typo_ascent: int
+    typo_descent: int
+    typo_line_gap: int
+    win_ascent: int
+    win_descent: int
+    fs_selection: int
+
+    @classmethod
+    def from_font(cls, font: TTFont) -> VerticalMetrics:
+        head = font["head"]
+        hhea = font["hhea"]
+        os2 = font["OS/2"]
+        return cls(
+            upm=head.unitsPerEm,
+            hhea_ascent=hhea.ascent,
+            hhea_descent=hhea.descent,
+            hhea_line_gap=hhea.lineGap,
+            typo_ascent=os2.sTypoAscender,
+            typo_descent=os2.sTypoDescender,
+            typo_line_gap=os2.sTypoLineGap,
+            win_ascent=os2.usWinAscent,
+            win_descent=os2.usWinDescent,
+            fs_selection=os2.fsSelection,
+        )
+
+    def apply_to(self, font: TTFont) -> None:
+        if font["head"].unitsPerEm != self.upm:
+            raise ValueError(
+                f"UPM mismatch: target font UPM={font['head'].unitsPerEm} "
+                f"!= source metrics UPM={self.upm}; rescale before apply",
+            )
+        hhea = font["hhea"]
+        os2 = font["OS/2"]
+        hhea.ascent = self.hhea_ascent
+        hhea.descent = self.hhea_descent
+        hhea.lineGap = self.hhea_line_gap
+        os2.sTypoAscender = self.typo_ascent
+        os2.sTypoDescender = self.typo_descent
+        os2.sTypoLineGap = self.typo_line_gap
+        os2.usWinAscent = self.win_ascent
+        os2.usWinDescent = self.win_descent
+        os2.fsSelection = (os2.fsSelection & ~(1 << 7)) | (self.fs_selection & (1 << 7))
 
 
 def patch_emoji_only(
     emoji_path: Path,
     output_path: Path,
     target_upm: int = 1000,
-    family_name: str = "Noto Emoji Aligned",
+    family_name: str = "Twemoji Aligned",
+    metrics_from: Path | None = None,
 ) -> int:
-    print(f"[patch-emoji] emoji  = {emoji_path}")
-    print(f"[patch-emoji] output = {output_path}")
-    print(f"[patch-emoji] family = {family_name}, UPM = {target_upm}")
+    print(f"[patch-emoji] emoji   = {emoji_path}")
+    print(f"[patch-emoji] output  = {output_path}")
+    print(f"[patch-emoji] family  = {family_name}, UPM = {target_upm}")
+    print(f"[patch-emoji] metrics = {metrics_from or '(keep emoji font defaults)'}")
+
+    base_metrics: VerticalMetrics | None = None
+    if metrics_from is not None:
+        base_metrics = VerticalMetrics.from_font(TTFont(str(metrics_from)))
+        if base_metrics.upm != target_upm:
+            raise ValueError(
+                f"metrics-from UPM={base_metrics.upm} != target_upm={target_upm}; "
+                "must match so vertical metrics line up after rescale",
+            )
 
     emoji = TTFont(str(emoji_path))
     emoji_cmap = emoji.getBestCmap()
     candidate_cps = sorted(c for c in emoji_cmap if in_common_emoji(c))
-    print(f"[patch-emoji] 白名单 ∩ Noto cmap = {len(candidate_cps)} 字符")
+    print(f"[patch-emoji] 白名单 ∩ emoji cmap = {len(candidate_cps)} 字符")
     if not candidate_cps:
         return 1
 
-    # 子集化（COLR/CPAL 跟随 layer glyph 自动保留）
     sub_opts = SubsetOptions()
     sub_opts.layout_features = ["*"]
     sub_opts.glyph_names = True
@@ -58,12 +113,10 @@ def patch_emoji_only(
     sub.subset(emoji)
     print(f"[patch-emoji] 子集后 glyph 数 = {emoji['maxp'].numGlyphs}")
 
-    # UPM 重缩放
     if emoji["head"].unitsPerEm != target_upm:
         print(f"[patch-emoji] UPM {emoji['head'].unitsPerEm} -> {target_upm}")
         scale_upem(emoji, target_upm)
 
-    # 强制 advance：仅 cmap-mapped glyph（color layer glyph 由 COLR 引用，宽度不参与排版）
     cmap = emoji.getBestCmap()
     forced = 0
     for cp, gname in cmap.items():
@@ -72,12 +125,12 @@ def patch_emoji_only(
             forced += 1
     print(f"[patch-emoji] 强制 {forced} 个 emoji glyph advance = {target_upm}")
 
-    # 检查 COLR/CPAL 仍存（彩色信息）
-    has_colr = "COLR" in emoji
-    has_cpal = "CPAL" in emoji
-    print(f"[patch-emoji] COLR={has_colr} CPAL={has_cpal} (彩色表保留)")
+    if base_metrics is not None:
+        base_metrics.apply_to(emoji)
+        line_total = base_metrics.win_ascent + base_metrics.win_descent
+        print(f"[patch-emoji] 纵向 metrics ← base，行距单位 = {line_total} (UPM {target_upm})")
 
-    # name 表
+    print(f"[patch-emoji] COLR={'COLR' in emoji} CPAL={'CPAL' in emoji} (彩色表保留)")
     update_name_table(emoji, family_name, "Regular")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -88,19 +141,34 @@ def patch_emoji_only(
 
 
 def main() -> int:
-    if len(sys.argv) < 3:
-        print(
-            "用法: python patch_emoji_only.py <noto-colrv1.ttf> <output.ttf> [family]",
-            file=sys.stderr,
-        )
-        return 2
-    emoji = Path(sys.argv[1])
-    output = Path(sys.argv[2])
-    family = sys.argv[3] if len(sys.argv) > 3 else "Noto Emoji Aligned"
-    if not emoji.exists():
-        print(f"emoji 不存在: {emoji}", file=sys.stderr)
+    ap = argparse.ArgumentParser(description="Patch emoji font: subset + rescale + align metrics.")
+    ap.add_argument("emoji", type=Path, help="emoji font path (e.g. TwemojiMozilla.ttf)")
+    ap.add_argument("output", type=Path, help="output ttf path")
+    ap.add_argument("family", nargs="?", default="Twemoji Aligned", help="family name")
+    ap.add_argument(
+        "--metrics-from",
+        type=Path,
+        default=None,
+        help="copy vertical metrics from this font (e.g. Sarasa Term SC); "
+        "must share the same UPM as --target-upm. Required to fix tight terminal line spacing.",
+    )
+    ap.add_argument("--target-upm", type=int, default=1000)
+    args = ap.parse_args()
+
+    if not args.emoji.exists():
+        print(f"emoji 不存在: {args.emoji}", file=sys.stderr)
         return 1
-    return patch_emoji_only(emoji, output, target_upm=1000, family_name=family)
+    if args.metrics_from is not None and not args.metrics_from.exists():
+        print(f"metrics-from 不存在: {args.metrics_from}", file=sys.stderr)
+        return 1
+
+    return patch_emoji_only(
+        args.emoji,
+        args.output,
+        target_upm=args.target_upm,
+        family_name=args.family,
+        metrics_from=args.metrics_from,
+    )
 
 
 if __name__ == "__main__":

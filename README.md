@@ -149,4 +149,5 @@ python patch_emoji_only.py "C:/Windows/Fonts/seguiemj.ttf" SegoeAligned.ttf "Seg
 
 ## Changelog
 
+- v0.1.1（2026-04-25）：修复终端行距偏窄。`TwemojiAligned` 的 `hhea` / `OS/2 sTypo*` / `OS/2 usWin*` 三套纵向 metrics 改为从 Sarasa Term SC 拷贝（原值约小 11–13%），解决"Aligned 在 fontFamily 链首位时终端拿到偏小行高"。`patch_emoji_only.py` 新增 `--metrics-from <font.ttf>` flag。
 - v0.1.0（2026-04-25）：初版。49 emoji + Sarasa Term SC Regular。基于 Twemoji v0.7.0 / Sarasa 1.0.x。
