@@ -10,7 +10,8 @@ CJK monospace + 彩色 emoji 严格等宽对齐字体——VS Code / 终端表�
 | 文件 | 大小 | 用途 |
 |------|------|------|
 | `TwemojiAligned-Regular.ttf` | 18 KB | 49 个常用 emoji，advance=1000，配 Sarasa Term SC 用 |
-| `SarasaTermSCEmoji.ttc` | 24 MB | TTC 合集：Sarasa Term SC + Twemoji Aligned 单文件 |
+| `SarasaTermSC-Circled-Regular.ttf` | 24 MB | Sarasa Term SC + 圈数字全角化（①②… 看清数字，详见 [圈数字加宽](#圈数字加宽看清里面的数字)）；family 名仍是 `Sarasa Term SC`，drop-in 替换原版 |
+| `SarasaTermSCEmoji.ttc` | 24 MB | TTC 合集：圈数字加宽版 Sarasa Term SC + Twemoji Aligned 单文件 |
 
 49 个 emoji 范围（完整列表见 [`patch.py`](patch.py) 的 `COMMON_EMOJI_CODEPOINTS`）：
 - 状态/标记：✅ ❌ ❎ ⭐ ✓ ✗ ✔ ✘
@@ -20,11 +21,33 @@ CJK monospace + 彩色 emoji 严格等宽对齐字体——VS Code / 终端表�
 - 工具：🚀 🔧 🔨 📌 📎 📝 📖 📚 📅 🕑 ⏰ ⌛ 🔒 🔓 🔑 🔍
 - 心情：❤ 💔 💯
 
+## 圈数字加宽（看清里面的数字）
+
+**问题**：Sarasa **Term** 变体把"东亚歧义宽度"字符（①②③… 等）压成半角（advance=500），圆圈被横向压扁（墨迹宽/高≈0.59），里头的数字挤成一小团看不清。
+
+**解法**：同家族的 Sarasa **Mono** SC 里这些字符是正经全角（advance=1000、圆圈宽/高≈1.0），设计现成。[`patch_circled_width.py`](patch_circled_width.py) 把这 122 个字形 + advance 从 Mono 移植进 Term，**零下载、零失真**——只换轮廓和宽度，name/cmap/纵向 metrics 全不动，family 名仍是 `Sarasa Term SC`（drop-in 替换）。
+
+覆盖"圈数字全家"122 个：①–⑳、⓪、⑴–⒇（括号）、⓫–⓴/⓿（实心反白）、⓵–⓾（双圈）、❶–❿/➀–➉/➊–➓（dingbat）、㉑–㊿。**只动这些，框线 `│─┌`、ASCII、CJK 一律不变。**
+
+### ⚠️ 重要：只在按 advance 排版的渲染器里生效
+
+"占几列"是**渲染器**按 Unicode 宽度表决定的，圈数字属"歧义宽度(Ambiguous)"——字体改不动这个。各场景实测：
+
+| 渲染器 | 加宽效果 | 说明 |
+|------|------|------|
+| **VS Code 编辑器** | ✅ **生效** | 按字形 advance 排版（和本项目 emoji 对齐同一机制）→ 圈数字占 2 列、数字看清 |
+| WezTerm / iTerm2 / macOS Terminal / mintty | ✅ 需配置 | 这些终端有"歧义宽度=宽/双宽"开关，打开后生效（如 WezTerm `treat_east_asian_ambiguous_width_as_wide = true`） |
+| **Windows Terminal** | ⚠️ **不生效** | [无歧义宽度设置](https://github.com/microsoft/terminal/issues/10844)，按 [wcwidth 惯例](https://github.com/microsoft/terminal/issues/2066)当 1 格 → 字形被压回原样（无害但无改善），个别配置下会溢出重叠 |
+| **VS Code 集成终端**（xterm.js） | ⚠️ **不生效** | [同样无该选项](https://github.com/xtermjs/xterm.js/issues/1453)，`rescaleOverlappingGlyphs` 会把超宽字形压回 1 格 |
+
+**一句话**：在 **VS Code 编辑器**里读 markdown 表格 / 代码注释中的 ①②③ → 加宽有效、数字清晰；在 **Windows Terminal / VS Code 集成终端**里 → 被压回原样，无改善（也不会变更糟）。如果你重度依赖终端里看清圈数字，目前唯一办法是换支持歧义宽度开关的终端（如 WezTerm）。
+
 ## 安装
 
 ### 方案 A — 标准做法（推荐）
 
-1. 装 [Sarasa Term SC](https://github.com/be5invis/Sarasa-Gothic/releases)（如未装）
+1. **圈数字加宽版**：先卸载原版 Sarasa Term SC（同 family 名，需替换）→ 双击 `SarasaTermSC-Circled-Regular.ttf` → Install for All Users
+   （不需要加宽圈数字就跳过本步，直接装原版 [Sarasa Term SC](https://github.com/be5invis/Sarasa-Gothic/releases)）
 2. 双击 `TwemojiAligned-Regular.ttf` → Install for All Users
 3. VS Code `settings.json`（fontSize=16 实测甜点）：
    ```json
@@ -63,9 +86,10 @@ build.cmd
 
 依次跑：
 1. 创建 `.venv` 装 fontTools
-2. [`download.py`](download.py) 拉 Twemoji-Mozilla v0.7.0
-3. [`patch_emoji_only.py`](patch_emoji_only.py) 子集化 + UPM 缩放 + advance 强制 1000
-4. [`build_ttc.py`](build_ttc.py) 把 Sarasa + 改造后 Twemoji 装 .ttc
+2. [`patch_circled_width.py`](patch_circled_width.py) 从 Sarasa Mono SC 把圈数字全角字形移植进 Term → `SarasaTermSC-Circled-Regular.ttf`（需本机已装 Sarasa Mono SC Regular，与 Term 同发布包）
+3. [`download.py`](download.py) 拉 Twemoji-Mozilla v0.7.0
+4. [`patch_emoji_only.py`](patch_emoji_only.py) 子集化 + UPM 缩放 + advance 强制 1000
+5. [`build_ttc.py`](build_ttc.py) 把加宽版 Sarasa + 改造后 Twemoji 装 .ttc
 
 ### 自定义白名单
 
@@ -156,6 +180,7 @@ python patch_emoji_only.py "C:/Windows/Fonts/seguiemj.ttf" SegoeAligned.ttf "Seg
 
 ## Changelog
 
+- v0.2.0（2026-06-18）：**圈数字加宽**。①②③… 等"东亚歧义宽度"字符在 Sarasa Term 里被压成半角、数字看不清；新增 [`patch_circled_width.py`](patch_circled_width.py) 从同家族 Sarasa Mono SC 移植 122 个全角字形（圈数字全家：①–⑳/⓪/括号/实心反白/双圈/dingbat/㉑–㊿），零下载零失真，family 名不变。新增产物 `SarasaTermSC-Circled-Regular.ttf`，TTC 改用加宽版 Sarasa。⚠️ 只在按 advance 排版的渲染器（VS Code 编辑器、或开了"歧义宽度=宽"的终端如 WezTerm/iTerm2）生效；Windows Terminal / VS Code 集成终端无该设置，会把字形压回原样（详见[圈数字加宽](#圈数字加宽看清里面的数字)）。
 - v0.1.4（2026-04-25）：重新加回 `lineHeight` 推荐，但理由换了。v0.1.3 以为"字体 metrics 对齐 1.25 em → 默认行高就够"，实测发现 **VS Code 编辑器 `lineHeight=0` 默认走平台常数**（Win 1.35 × fontSize，Mac 1.5），**完全不读字体 metrics**；终端默认（1.0）才走字体 1.25 em。两边默认值不一致 + 都偏松。fontSize=16 实测甜点：`editor.lineHeight: 22`（px 绝对值）+ `terminal.integrated.lineHeight: 1.1`（= 22px）。README 增加换算公式给非 16 fontSize 用户。
 - v0.1.3（2026-04-25）：~~撤回 v0.1.2 的 `lineHeight` 推荐。~~ **被 v0.1.4 部分推翻**——撤回的方向对（v0.1.2 的 1.5/1.3 确实太松），但"用字体自带就行"是错觉，因为 VS Code 编辑器压根不读字体 metrics。
 - v0.1.2（2026-04-25）：~~README 推荐 `editor.lineHeight: 1.5` / `terminal.integrated.lineHeight: 1.3`。~~ **已被 v0.1.3 撤回**——当时的"挤"是字体缓存假象，非字体真实 metrics 问题。
