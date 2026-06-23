@@ -10,7 +10,9 @@ CJK monospace + 彩色 emoji 严格等宽对齐字体——VS Code / 终端表�
 | 文件 | 大小 | 用途 |
 |------|------|------|
 | `TwemojiAligned-Regular.ttf` | 18 KB | 49 个常用 emoji，advance=1000，配 Sarasa Term SC 用 |
-| `SarasaTermSC-Circled-Regular.ttf` | 24 MB | Sarasa Term SC + 圈数字全角化（①②… 看清数字，详见 [圈数字加宽](#圈数字加宽看清里面的数字)）；family 名仍是 `Sarasa Term SC`，drop-in 替换原版 |
+| `SarasaTermSC-Circled-Regular.ttf` | 24 MB | Sarasa Term SC + 圈数字全角化（①②… 看清数字）；family 名仍是 `Sarasa Term SC`，drop-in。**仅适合编辑器**——终端里 Ambiguous 圈数字会被压糊，见 [编辑器 vs 终端](#编辑器-vs-终端为什么要两套字体) |
+| `SarasaTermSC-CircledNamed-Regular.ttf` | 24 MB | **编辑器版**：同上，但 family 改名 `Sarasa Term SC Circled`（独立名，与终端版共存）；配 `editor.fontFamily` |
+| `SarasaTermSC-TermFix-Regular.ttf` | 24 MB | **终端版**：Ambiguous 圈数字半角(终端 1 列清晰) + Wide 圈数字全角(终端 2 列填满)；family `Sarasa Term SC`，drop-in；配 `terminal.integrated.fontFamily` |
 | `SarasaTermSCEmoji.ttc` | 24 MB | TTC 合集：圈数字加宽版 Sarasa Term SC + Twemoji Aligned 单文件 |
 
 49 个 emoji 范围（完整列表见 [`patch.py`](patch.py) 的 `COMMON_EMOJI_CODEPOINTS`）：
@@ -40,18 +42,40 @@ CJK monospace + 彩色 emoji 严格等宽对齐字体——VS Code / 终端表�
 | **Windows Terminal** | ⚠️ **不生效** | [无歧义宽度设置](https://github.com/microsoft/terminal/issues/10844)，按 [wcwidth 惯例](https://github.com/microsoft/terminal/issues/2066)当 1 格 → 字形被压回原样（无害但无改善），个别配置下会溢出重叠 |
 | **VS Code 集成终端**（xterm.js） | ⚠️ **不生效** | [同样无该选项](https://github.com/xtermjs/xterm.js/issues/1453)，`rescaleOverlappingGlyphs` 会把超宽字形压回 1 格 |
 
-**一句话**：在 **VS Code 编辑器**里读 markdown 表格 / 代码注释中的 ①②③ → 加宽有效、数字清晰；在 **Windows Terminal / VS Code 集成终端**里 → 被压回原样，无改善（也不会变更糟）。如果你重度依赖终端里看清圈数字，目前唯一办法是换支持歧义宽度开关的终端（如 WezTerm）。
+**一句话**：在 **VS Code 编辑器**里读 markdown 表格 / 代码注释中的 ①②③ → 加宽有效、数字清晰。终端要分两类看——见下一节，并给出"编辑器全角 + 终端混合"的两套字体方案。
+
+### 编辑器 vs 终端：为什么要两套字体
+
+圈数字其实分两类 Unicode 宽度，**终端按这个分类给格子**（与字体无关）：
+
+| 类别 | 字符 | 终端给几列 | 终端里该用 |
+|------|------|-----------|-----------|
+| **Ambiguous 歧义** | ①–⑳、⑴–⒇、❶❿、➀➉…（U+2460+） | **1 列** | **半角**字形（全角会被压糊） |
+| **Wide 宽** | ㉑–㉟（U+3251-325F）、㊱–㊿（U+32B1-32BF） | **2 列** | **全角**字形（半角只占左半格） |
+
+所以全角版 `SarasaTermSC-Circled-Regular.ttf` 在**编辑器**里全部清晰，拿到**终端**里却：Ambiguous 的 ①②③ 被 xterm.js 压糊、Wide 的 ㉑㉟ 正常。而原版相反——Ambiguous 半角清晰、但 Wide 的 ㉑㉟ 也被压成半角、在 2 列格子里只占左半边。两边都讨好不了 → 拆成两个 family：
+
+- **编辑器** 用 `SarasaTermSC-CircledNamed-Regular.ttf`（family `Sarasa Term SC Circled`）：全部全角，编辑器按 advance 排版、都是 2 列清晰。
+- **终端** 用 `SarasaTermSC-TermFix-Regular.ttf`（family `Sarasa Term SC`，drop-in）：Ambiguous 半角（1 列清晰）+ Wide 全角（2 列填满）。
+
+两个文件由 [`patch_split.py`](patch_split.py) 从全角版 + 原版生成。
+
+> **改不了的硬限制**：终端里 Ambiguous 圈数字（①②③）只能 1 列——这是 Unicode 分类 + xterm.js（VS Code 集成终端 / Windows Terminal）**没有"歧义=宽"开关**决定的，任何字体都无法让它们在这些终端里占 2 列。要 ①②③ 在终端也放大，只能换有该开关的终端（WezTerm：`treat_east_asian_ambiguous_width_as_wide = true`，但这会让框线 ─│┌ 也变 2 列、搞乱 TUI）。**想看清 ①②③，最省事是去编辑器看。**
 
 ## 安装
 
-### 方案 A — 标准做法（推荐）
+### 方案 A — 编辑器 + 终端都最优（推荐）
 
-1. **圈数字加宽版**：先卸载原版 Sarasa Term SC（同 family 名，需替换）→ 双击 `SarasaTermSC-Circled-Regular.ttf` → Install for All Users
-   （不需要加宽圈数字就跳过本步，直接装原版 [Sarasa Term SC](https://github.com/be5invis/Sarasa-Gothic/releases)）
-2. 双击 `TwemojiAligned-Regular.ttf` → Install for All Users
+1. 先卸载原版 Sarasa Term SC（下面**终端版**同 family 名，需替换）
+2. 装两个 Sarasa + 一个 Twemoji（双击 → Install for All Users）：
+   - `SarasaTermSC-TermFix-Regular.ttf`     终端版，family `Sarasa Term SC`（drop-in 替换原版）
+   - `SarasaTermSC-CircledNamed-Regular.ttf` 编辑器版，family `Sarasa Term SC Circled`
+   - `TwemojiAligned-Regular.ttf`            彩色 emoji
+   > 只想要编辑器全角、终端将就？跳过终端版，只装 `SarasaTermSC-Circled-Regular.ttf`（family 仍 `Sarasa Term SC`）+ Twemoji，第 3 步 `editor.fontFamily` 用 `'Sarasa Term SC', 'Twemoji Aligned', ...` 即可。
 3. VS Code `settings.json`（fontSize=16 实测甜点）：
    ```json
-   "editor.fontFamily": "'Twemoji Aligned', 'Sarasa Term SC', 'Cascadia Code', monospace",
+   "editor.fontFamily": "'Sarasa Term SC Circled', 'Sarasa Term SC', 'Twemoji Aligned', 'Cascadia Code', monospace",
+   "terminal.integrated.fontFamily": "'Sarasa Term SC', 'Twemoji Aligned', monospace",
    "editor.fontSize": 16,
    "editor.unicodeHighlight.ambiguousCharacters": false,
    "editor.fontLigatures": false,
@@ -180,6 +204,7 @@ python patch_emoji_only.py "C:/Windows/Fonts/seguiemj.ttf" SegoeAligned.ttf "Seg
 
 ## Changelog
 
+- v0.3.0（2026-06-23）：**编辑器 / 终端分治**。全角圈数字在 VS Code 编辑器（按 advance 排版）清晰，但在 xterm.js 终端里 Ambiguous 圈数字（①②③）被压糊、原版又把 Wide 圈数字（㉑㉟）压成半角只占半格——一套字体两边讨好不了。新增 [`patch_split.py`](patch_split.py) 拆出两个 family：编辑器版 `SarasaTermSC-CircledNamed-Regular.ttf`（全部全角，family `Sarasa Term SC Circled`）+ 终端版 `SarasaTermSC-TermFix-Regular.ttf`（Ambiguous 半角 + Wide 全角，family `Sarasa Term SC` drop-in）。`editor.fontFamily` 用前者、`terminal.integrated.fontFamily` 用后者。详见 [编辑器 vs 终端](#编辑器-vs-终端为什么要两套字体)。
 - v0.2.0（2026-06-18）：**圈数字加宽**。①②③… 等"东亚歧义宽度"字符在 Sarasa Term 里被压成半角、数字看不清；新增 [`patch_circled_width.py`](patch_circled_width.py) 从同家族 Sarasa Mono SC 移植 122 个全角字形（圈数字全家：①–⑳/⓪/括号/实心反白/双圈/dingbat/㉑–㊿），零下载零失真，family 名不变。新增产物 `SarasaTermSC-Circled-Regular.ttf`，TTC 改用加宽版 Sarasa。⚠️ 只在按 advance 排版的渲染器（VS Code 编辑器、或开了"歧义宽度=宽"的终端如 WezTerm/iTerm2）生效；Windows Terminal / VS Code 集成终端无该设置，会把字形压回原样（详见[圈数字加宽](#圈数字加宽看清里面的数字)）。
 - v0.1.4（2026-04-25）：重新加回 `lineHeight` 推荐，但理由换了。v0.1.3 以为"字体 metrics 对齐 1.25 em → 默认行高就够"，实测发现 **VS Code 编辑器 `lineHeight=0` 默认走平台常数**（Win 1.35 × fontSize，Mac 1.5），**完全不读字体 metrics**；终端默认（1.0）才走字体 1.25 em。两边默认值不一致 + 都偏松。fontSize=16 实测甜点：`editor.lineHeight: 22`（px 绝对值）+ `terminal.integrated.lineHeight: 1.1`（= 22px）。README 增加换算公式给非 16 fontSize 用户。
 - v0.1.3（2026-04-25）：~~撤回 v0.1.2 的 `lineHeight` 推荐。~~ **被 v0.1.4 部分推翻**——撤回的方向对（v0.1.2 的 1.5/1.3 确实太松），但"用字体自带就行"是错觉，因为 VS Code 编辑器压根不读字体 metrics。

@@ -41,6 +41,10 @@ echo [build] widening circled numbers (Mono -^> Term)...
 python patch_circled_width.py "%SARASA%" output\SarasaTermSC-Circled-Regular.ttf --source "%SARASAMONO%" || goto :fail
 set "SARASA_PATCHED=output\SarasaTermSC-Circled-Regular.ttf"
 
+:: 3d. split into editor (all full-width) + terminal (Wide-only full-width) variants
+echo [build] splitting editor/terminal circled variants...
+python patch_split.py "%SARASA_PATCHED%" "%SARASA%" output || goto :fail
+
 :: 4. download Twemoji (primary, CC-BY 4.0, publishable)
 echo [build] downloading Twemoji...
 python download.py || goto :fail
@@ -56,9 +60,11 @@ python build_ttc.py output\SarasaTermSCEmoji.ttc "%SARASA_PATCHED%" output\Twemo
 echo.
 echo ===== DONE =====
 echo Output:
-echo   - output\TwemojiAligned-Regular.ttf       (~20KB, 49 emoji subset, publishable CC-BY 4.0)
-echo   - output\SarasaTermSC-Circled-Regular.ttf (~24MB, Sarasa Term SC + full-width ①②… )
-echo   - output\SarasaTermSCEmoji.ttc            (~24MB, circled-widened Sarasa + Twemoji bundle)
+echo   - output\TwemojiAligned-Regular.ttf            (~20KB, 49 emoji subset, publishable CC-BY 4.0)
+echo   - output\SarasaTermSC-Circled-Regular.ttf      (~24MB, Sarasa Term SC + full-width ①②… )
+echo   - output\SarasaTermSC-CircledNamed-Regular.ttf (~24MB, editor variant, family 'Sarasa Term SC Circled')
+echo   - output\SarasaTermSC-TermFix-Regular.ttf      (~24MB, terminal variant: Ambiguous half + Wide full)
+echo   - output\SarasaTermSCEmoji.ttc                 (~24MB, circled-widened Sarasa + Twemoji bundle)
 echo.
 echo Install ANY of these:
 echo.

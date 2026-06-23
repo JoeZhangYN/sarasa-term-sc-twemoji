@@ -3,3 +3,8 @@ downloads/
 output/
 __pycache__/
 *.pyc
+
+# 实验/临时文件(原型、备份、预览、一次性脚本)
+_*
+# Claude Code 本地工具配置
+.claude/
